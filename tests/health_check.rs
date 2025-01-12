@@ -1,7 +1,7 @@
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
-use zero2prod::configuration::{get_configuration, DatabaseSettings, Settings};
+use zero2prod::configuration::{get_configuration, DatabaseSettings};
 
 #[tokio::test]
 async fn health_check_works() {
