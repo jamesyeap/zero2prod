@@ -1,4 +1,3 @@
-use actix_web::web;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
@@ -20,6 +19,9 @@ async fn health_check_works() {
     // Assert
     assert!(response.status().is_success());
     assert_eq!(Some(0), response.content_length());
+
+    // Clean Up
+    test_app.cleanup().await;
 }
 
 #[tokio::test]
@@ -48,6 +50,9 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
     assert_eq!(saved.email, "john_doe@gmail.com");
     assert_eq!(saved.name, "John Doe");
+
+    // Clean Up
+    test_app.cleanup().await;
 }
 
 #[tokio::test]
@@ -79,11 +84,15 @@ async fn subscribe_returns_a_400_for_invalid_form_data() {
             "The API did not fail with 400 when the payload was missing the {description}"
         );
     }
+
+    // Clean Up
+    test_app.cleanup().await;
 }
 
 pub struct TestApp {
     pub address: String,
     pub db_pool: PgPool,
+    database_name: String, // save name of temporary database for clean up
 }
 async fn spawn_app() -> TestApp {
     let mut configuration = get_configuration().expect("Failed to load config");
@@ -101,6 +110,7 @@ async fn spawn_app() -> TestApp {
     TestApp {
         address: format!("http://127.0.0.1:{port}"),
         db_pool,
+        database_name: configuration.database.database_name,
     }
 }
 
@@ -124,4 +134,27 @@ async fn create_test_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to migrate the database");
 
     connection_pool
+}
+
+impl TestApp {
+    pub async fn cleanup(&self) {
+        let config = get_configuration().expect("Failed to read configuration");
+
+        self.db_pool.close().await;
+
+        let connection_string = config.database.connection_string_without_db();
+        let mut connection = PgConnection::connect(&connection_string)
+            .await
+            .expect("Failed to connect to Postgres");
+
+        connection
+            .execute(format!(r#"DROP DATABASE "{}";"#, self.database_name).as_str())
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    r#"Failed to drop database: {} due to error: {}"#,
+                    self.database_name, e
+                )
+            });
+    }
 }
