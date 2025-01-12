@@ -1,5 +1,5 @@
-use actix_web::{HttpResponse, Responder};
 use actix_web::web::Form;
+use actix_web::{HttpResponse, Responder};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
