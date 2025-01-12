@@ -7,6 +7,6 @@ pub struct FormData {
     name: String,
     email: String,
 }
-pub async fn subscribe(form: Form<FormData>) -> impl Responder {
+pub async fn subscribe(_form: Form<FormData>) -> impl Responder {
     HttpResponse::Ok()
 }
