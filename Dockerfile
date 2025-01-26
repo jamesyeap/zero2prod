@@ -1,12 +1,29 @@
-FROM rust:1.83.0
+FROM lukemathwalker/cargo-chef:latest-rust-1.83.0 AS chef
+
+WORKDIR /app
+RUN apt update && apt install lld clang -y
+
+FROM chef AS planner
+
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+COPY . .
+ENV SQLX_OFFLINE=true
+RUN cargo build --release
+
+FROM rust:1.83.0 AS runtime
 
 WORKDIR /app
 
-RUN apt update && apt install lld clang -y
+COPY --from=builder /app/target/release/zero2prod zero2prod
+COPY configuration configuration
 
-COPY . .
+ENV APP_ENVIRONMENT=production
 
-ENV SQLX_OFFLINE true
-RUN cargo build --release
-
-ENTRYPOINT ["./target/release/zero2prod" ]
+ENTRYPOINT ["./zero2prod" ]

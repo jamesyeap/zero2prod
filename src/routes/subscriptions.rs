@@ -21,8 +21,6 @@ pub struct FormData {
     )
 )]
 pub async fn subscribe(form: Form<FormData>, pool: web::Data<PgPool>) -> impl Responder {
-    let query_span = tracing::info_span!("Saving new subscriber details in the database");
-
     match insert_subscriber(form, pool).await {
         Ok(_) => {
             tracing::info!("New subscriber details have been saved.");
