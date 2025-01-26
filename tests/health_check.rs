@@ -1,7 +1,23 @@
+use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info".to_string();
+    let subscriber_name = "test".to_string();
+
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::stdout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::sink);
+        init_subscriber(subscriber);
+    };
+});
 
 #[tokio::test]
 async fn health_check_works() {
@@ -95,6 +111,8 @@ pub struct TestApp {
     database_name: String, // save name of temporary database for clean up
 }
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let mut configuration = get_configuration().expect("Failed to load config");
     configuration.database.database_name = Uuid::new_v4().to_string();
 
@@ -116,7 +134,7 @@ async fn spawn_app() -> TestApp {
 
 async fn create_test_database(config: &DatabaseSettings) -> PgPool {
     let connection_string = config.connection_string_without_db();
-    let mut connection = PgConnection::connect(&connection_string)
+    let mut connection = PgConnection::connect(&connection_string.expose_secret())
         .await
         .expect("Failed to connect to Postgres");
 
@@ -125,7 +143,7 @@ async fn create_test_database(config: &DatabaseSettings) -> PgPool {
         .await
         .expect("Failed to create database.");
 
-    let connection_pool = PgPool::connect(&config.connection_string())
+    let connection_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("Failed to connect to Postgres");
     sqlx::migrate!("./migrations")
@@ -143,7 +161,7 @@ impl TestApp {
         self.db_pool.close().await;
 
         let connection_string = config.database.connection_string_without_db();
-        let mut connection = PgConnection::connect(&connection_string)
+        let mut connection = PgConnection::connect(&connection_string.expose_secret())
             .await
             .expect("Failed to connect to Postgres");
 
